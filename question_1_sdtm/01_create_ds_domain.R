@@ -89,12 +89,15 @@ ds <- ds %>%
   left_join(dm_ids, by = "patient_number") %>%
   left_join(visits, by = "VISIT") %>%
   # sdtm.oak keeps dates in its own iso8601 class, so convert to text first
-  mutate(DOMAIN  = "DS",
-         DSSTDTC = as.character(DSSTDTC),
-         DSDTC   = as.character(DSDTC),
-         DSSTDT  = as.Date(substr(DSSTDTC, 1, 10))) %>%
-  derive_study_day(dm_domain = dm_ref, tgdt = "DSSTDT",
+  mutate(DOMAIN      = "DS",
+         DSDTC       = as.character(DSDTC),
+         DSSTDTC_CHR = as.character(DSSTDTC),
+         # derive_study_day() needs a Date, so use the date part for now
+         DSSTDTC     = as.Date(substr(DSSTDTC_CHR, 1, 10))) %>%
+  derive_study_day(dm_domain = dm_ref, tgdt = "DSSTDTC",
                    refdt = "RFXSTDT", study_day_var = "DSSTDY") %>%
+  # put back the full ISO 8601 text
+  mutate(DSSTDTC = DSSTDTC_CHR) %>%
   derive_seq(tgt_var = "DSSEQ",
              rec_vars = c("STUDYID", "USUBJID", "DSSTDTC", "DSTERM")) %>%
   select(STUDYID, DOMAIN, USUBJID, DSSEQ, DSTERM, DSDECOD, DSCAT,
@@ -105,11 +108,13 @@ ds <- ds %>%
 dir.create("question_1_sdtm", showWarnings = FALSE)
 write.csv(ds, "question_1_sdtm/ds.csv", row.names = FALSE, na = "")
 
-# Quick checks
-nrow(ds_raw)
-nrow(ds)
-sum(is.na(ds$USUBJID))
-sum(is.na(ds$VISITNUM))
-table(ds$DSCAT, useNA = "ifany")
-table(ds$DSDECOD, useNA = "ifany")
-head(ds)
+# Quick checks (printed to the console / log)
+cat("Records in raw data :", nrow(ds_raw), "\n")
+cat("Records in DS       :", nrow(ds), "\n")
+cat("Missing USUBJID     :", sum(is.na(ds$USUBJID)), "\n")
+cat("Missing VISITNUM    :", sum(is.na(ds$VISITNUM)), "\n")
+cat("Missing DSSTDTC     :", sum(is.na(ds$DSSTDTC)), "\n")
+cat("Missing DSSTDY      :", sum(is.na(ds$DSSTDY)), "\n")
+print(table(ds$DSCAT, useNA = "ifany"))
+print(table(ds$DSDECOD, useNA = "ifany"))
+print(head(ds))
