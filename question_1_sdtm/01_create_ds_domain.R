@@ -88,8 +88,11 @@ dm_ref <- dm %>%
 ds <- ds %>%
   left_join(dm_ids, by = "patient_number") %>%
   left_join(visits, by = "VISIT") %>%
-  mutate(DOMAIN = "DS",
-         DSSTDT = as.Date(substr(DSSTDTC, 1, 10))) %>%
+  # sdtm.oak keeps dates in its own iso8601 class, so convert to text first
+  mutate(DOMAIN  = "DS",
+         DSSTDTC = as.character(DSSTDTC),
+         DSDTC   = as.character(DSDTC),
+         DSSTDT  = as.Date(substr(DSSTDTC, 1, 10))) %>%
   derive_study_day(dm_domain = dm_ref, tgdt = "DSSTDT",
                    refdt = "RFXSTDT", study_day_var = "DSSTDY") %>%
   derive_seq(tgt_var = "DSSEQ",
