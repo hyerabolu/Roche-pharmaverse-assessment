@@ -1,0 +1,46 @@
+
+Attaching package: ‘dplyr’
+
+The following objects are masked from ‘package:stats’:
+
+    filter, lag
+
+The following objects are masked from ‘package:base’:
+
+    intersect, setdiff, setequal, union
+
+ℹ These terms could not be mapped per the controlled terminology: "Randomized", "Completed", "Study Terminated by Sponsor", "Screen Failure", and "Lost to Follow-Up".
+Records in raw data : 850 
+Records in DS       : 850 
+Missing USUBJID     : 0 
+Missing VISITNUM    : 0 
+Missing DSSTDTC     : 0 
+Missing DSSTDY      : 52 
+
+ DISPOSITION EVENT        OTHER EVENT PROTOCOL MILESTONE 
+               306                290                254 
+
+              ADVERSE EVENT                   COMPLETED 
+                         92                         110 
+                      DEATH             Final Lab Visit 
+                          3                         254 
+      Final Retrieval Visit            LACK OF EFFICACY 
+                         36                           4 
+          LOST TO FOLLOW-UP          PHYSICIAN DECISION 
+                          2                           3 
+         PROTOCOL VIOLATION                  RANDOMIZED 
+                          6                         254 
+             SCREEN FAILURE STUDY TERMINATED BY SPONSOR 
+                         52                           7 
+      WITHDRAWAL BY SUBJECT 
+                         27 
+# A tibble: 6 × 12
+  STUDYID DOMAIN USUBJID DSSEQ DSTERM DSDECOD DSCAT VISITNUM VISIT DSDTC DSSTDTC
+  <chr>   <chr>  <chr>   <int> <chr>  <chr>   <chr>    <dbl> <chr> <chr> <chr>  
+1 CDISCP… DS     01-701…     1 Rando… RANDOM… PROT…        3 BASE… 2014… 2014-0…
+2 CDISCP… DS     01-701…     2 Final… Final … OTHE…       13 WEEK… 2014… 2014-0…
+3 CDISCP… DS     01-701…     3 Proto… COMPLE… DISP…       13 WEEK… 2014… 2014-0…
+4 CDISCP… DS     01-701…     1 Rando… RANDOM… PROT…        3 BASE… 2012… 2012-0…
+5 CDISCP… DS     01-701…     2 Adver… ADVERS… DISP…        5 WEEK… 2012… 2012-0…
+6 CDISCP… DS     01-701…     3 Final… Final … OTHE…        5 WEEK… 2012… 2012-0…
+# ℹ 1 more variable: DSSTDY <int>
