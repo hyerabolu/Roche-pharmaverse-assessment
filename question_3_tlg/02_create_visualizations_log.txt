@@ -1,0 +1,42 @@
+
+> # All AE records in ADAE
+> adae <- pharmaverseadam::adae
+
+> # ---- Plot 1: AE severity by treatment (stacked bar) ----
+> p1 <- ggplot(adae, aes(x = ACTARM, fill = AESEV)) +
++   geom_bar() +
++   labs(title = " ..." ... [TRUNCATED] 
+
+> ggsave("question_3_tlg/plot1_ae_severity.png", p1, width = 8, height = 6, dpi = 300)
+
+> # ---- Plot 2: Top 10 AEs with 95% Clopper-Pearson CI ----
+> N <- n_distinct(adae$USUBJID)      # subjects in ADAE
+
+> top10 <- adae %>%
++   distinct(USUBJID, AETERM) %>%    # count each subject once per AE
++   count(AETERM) %>%
++   arrange(desc(n)) %>%
++   slice_hea .... [TRUNCATED] 
+
+> p2 <- ggplot(top10, aes(x = pct, y = AETERM)) +
++   geom_errorbar(aes(xmin = lo, xmax = hi), orientation = "y", width = 0.3) +
++   geom_point(size = .... [TRUNCATED] 
+
+> ggsave("question_3_tlg/plot2_top10_ae.png", p2, width = 9, height = 6, dpi = 300)
+
+> print(top10)
+# A tibble: 10 × 5
+   AETERM                          n   pct    lo    hi
+   <fct>                       <int> <dbl> <dbl> <dbl>
+ 1 PRURITUS                       57 25.3  19.8   31.5
+ 2 APPLICATION SITE PRURITUS      50 22.2  17.0   28.2
+ 3 ERYTHEMA                       38 16.9  12.2   22.4
+ 4 APPLICATION SITE ERYTHEMA      30 13.3   9.18  18.5
+ 5 RASH                           29 12.9   8.80  18.0
+ 6 DIZZINESS                      22  9.78  6.23  14.4
+ 7 APPLICATION SITE DERMATITIS    21  9.33  5.87  13.9
+ 8 APPLICATION SITE IRRITATION    21  9.33  5.87  13.9
+ 9 DIARRHOEA                      18  8     4.81  12.3
+10 SINUS BRADYCARDIA              17  7.56  4.46  11.8
+
+> sink()
