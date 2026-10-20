@@ -1,0 +1,87 @@
+
+> # ---- Inputs (blanks -> NA) ----
+> dm <- convert_blanks_to_na(pharmaversesdtm::dm)
+
+> vs <- convert_blanks_to_na(pharmaversesdtm::vs)
+
+> ex <- convert_blanks_to_na(pharmaversesdtm::ex)
+
+> ds <- convert_blanks_to_na(pharmaversesdtm::ds)
+
+> ae <- convert_blanks_to_na(pharmaversesdtm::ae)
+
+> adsl <- dm %>% select(-DOMAIN)
+
+> # ---- Exposure: datetimes, valid-dose records only ----
+> # Date must be complete (highest_imputation = "h"); time imputed with 00;
+> # ignore_seco .... [TRUNCATED] 
+
+> valid_dose <- expr(
++   EXDOSE > 0 | (EXDOSE == 0 & str_detect(toupper(EXTRT), "PLACEBO"))
++ )
+
+> adsl <- adsl %>%
++   derive_vars_merged(
++     dataset_add = ex_ext,
++     filter_add  = !!valid_dose & !is.na(EXSTDTM),
++     new_vars    = exprs(T .... [TRUNCATED] 
+
+> # ---- Age groups ----
+> adsl <- adsl %>%
++   mutate(
++     AGEGR9 = case_when(
++       AGE < 18               ~ "<18",
++       AGE >= 18 & AGE <= 5 .... [TRUNCATED] 
+
+> # ---- ITTFL: Y if ARM populated ----
+> adsl <- adsl %>%
++   mutate(ITTFL = if_else(!is.na(ARM), "Y", "N"))
+
+> # ---- LSTAVLDT: max of complete dates from VS, AE, DS, TRTEDTM ----
+> adsl <- adsl %>%
++   derive_vars_extreme_event(
++     by_vars = exprs(STUDYID .... [TRUNCATED] 
+
+> # ---- Self-QC ----
+> cat("\nN subjects:", n_distinct(adsl$USUBJID), "| dup USUBJID:",
++     sum(duplicated(adsl$USUBJID)), "\n")
+
+N subjects: 306 | dup USUBJID: 0 
+
+> print(count(adsl, AGEGR9, AGEGR9N))
+# A tibble: 2 × 3
+  AGEGR9  AGEGR9N     n
+  <chr>     <dbl> <int>
+1 18 - 50       2     1
+2 >50           3   305
+
+> print(count(adsl, ARM, ITTFL))
+# A tibble: 4 × 3
+  ARM                  ITTFL     n
+  <chr>                <chr> <int>
+1 Placebo              Y        86
+2 Screen Failure       Y        52
+3 Xanomeline High Dose Y        84
+4 Xanomeline Low Dose  Y        84
+
+> print(count(adsl, TRTSTMF))
+# A tibble: 2 × 2
+  TRTSTMF     n
+  <chr>   <int>
+1 H         254
+2 <NA>       52
+
+> cat("Missing TRTSDTM:", sum(is.na(adsl$TRTSDTM)),
++     "| Missing LSTAVLDT:", sum(is.na(adsl$LSTAVLDT)), "\n")
+Missing TRTSDTM: 52 | Missing LSTAVLDT: 0 
+
+> cat("LSTAVLDT < TRTSDTM date:",
++     sum(adsl$LSTAVLDT < as_date(adsl$TRTSDTM), na.rm = TRUE), "\n")
+LSTAVLDT < TRTSDTM date: 0 
+
+> # ---- Save ----
+> saveRDS(adsl, "question_2_adam/adsl.rds")
+
+> write.csv(adsl, "question_2_adam/adsl.csv", row.names = FALSE, na = "")
+
+> sink()
