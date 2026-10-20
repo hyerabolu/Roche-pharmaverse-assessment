@@ -2,7 +2,6 @@
 library(admiral)
 library(pharmaversesdtm)
 library(dplyr)
-library(lubridate)
 library(stringr)
 
 dir.create("question_2_adam", showWarnings = FALSE)
@@ -17,17 +16,17 @@ ae <- convert_blanks_to_na(pharmaversesdtm::ae)
 
 adsl <- dm %>% select(-DOMAIN)
 
-# ---- Exposure: datetimes, valid-dose records only ----
-# Date must be complete (highest_imputation = "h"); time imputed with 00;
-# ignore_seconds_flag = TRUE -> no TRTSTMF if only seconds are missing
-ex_ext <- ex %>%
+# ---- Exposure: keep valid doses only, then make datetimes ----
+# Valid dose: EXDOSE > 0, or EXDOSE = 0 with PLACEBO in EXTRT
+ex_valid <- ex %>%
+  filter(EXDOSE > 0 | (EXDOSE == 0 & str_detect(toupper(EXTRT), "PLACEBO"))) %>%
   derive_vars_dtm(
     dtc                 = EXSTDTC,
     new_vars_prefix     = "EXST",
-    highest_imputation  = "h",
-    time_imputation     = "first",
+    highest_imputation  = "h",    # date must be complete
+    time_imputation     = "first",# missing time -> 00:00:00
     flag_imputation     = "auto",
-    ignore_seconds_flag = TRUE
+    ignore_seconds_flag = TRUE    # no flag if only seconds missing
   ) %>%
   derive_vars_dtm(
     dtc                = EXENDTC,
@@ -36,96 +35,79 @@ ex_ext <- ex %>%
     time_imputation    = "last"
   )
 
-valid_dose <- expr(
-  EXDOSE > 0 | (EXDOSE == 0 & str_detect(toupper(EXTRT), "PLACEBO"))
-)
-
+# ---- TRTSDTM / TRTSTMF: first valid dose ----
 adsl <- adsl %>%
   derive_vars_merged(
-    dataset_add = ex_ext,
-    filter_add  = !!valid_dose & !is.na(EXSTDTM),
+    dataset_add = ex_valid,
+    filter_add  = !is.na(EXSTDTM),
     new_vars    = exprs(TRTSDTM = EXSTDTM, TRTSTMF = EXSTTMF),
     order       = exprs(EXSTDTM, EXSEQ),
     mode        = "first",
     by_vars     = exprs(STUDYID, USUBJID)
   ) %>%
-  derive_vars_merged(
-    dataset_add = ex_ext,
-    filter_add  = !!valid_dose & !is.na(EXENDTM),
-    new_vars    = exprs(TRTEDTM = EXENDTM),
-    order       = exprs(EXENDTM, EXSEQ),
-    mode        = "last",
-    by_vars     = exprs(STUDYID, USUBJID)
-  )
+  # ---- TRTEDTM: last valid dose (needed for LSTAVLDT) ----
+derive_vars_merged(
+  dataset_add = ex_valid,
+  filter_add  = !is.na(EXENDTM),
+  new_vars    = exprs(TRTEDTM = EXENDTM),
+  order       = exprs(EXENDTM, EXSEQ),
+  mode        = "last",
+  by_vars     = exprs(STUDYID, USUBJID)
+)
 
-# ---- Age groups ----
+# ---- AGEGR9 / AGEGR9N ----
 adsl <- adsl %>%
   mutate(
     AGEGR9 = case_when(
-      AGE < 18               ~ "<18",
-      AGE >= 18 & AGE <= 50  ~ "18 - 50",
-      AGE > 50               ~ ">50",
-      TRUE                   ~ NA_character_
+      AGE < 18              ~ "<18",
+      AGE >= 18 & AGE <= 50 ~ "18 - 50",
+      AGE > 50              ~ ">50"
     ),
     AGEGR9N = case_when(
       AGEGR9 == "<18"     ~ 1,
       AGEGR9 == "18 - 50" ~ 2,
-      AGEGR9 == ">50"     ~ 3,
-      TRUE                ~ NA_real_
+      AGEGR9 == ">50"     ~ 3
     )
   )
 
-# ---- ITTFL: Y if ARM populated ----
+# ---- ITTFL: Y if ARM is populated ----
 adsl <- adsl %>%
   mutate(ITTFL = if_else(!is.na(ARM), "Y", "N"))
 
-# ---- LSTAVLDT: max of complete dates from VS, AE, DS, TRTEDTM ----
-adsl <- adsl %>%
-  derive_vars_extreme_event(
-    by_vars = exprs(STUDYID, USUBJID),
-    events = list(
-      event(
-        dataset_name = "vs",
-        order        = exprs(VSDTC, VSSEQ),
-        condition    = !is.na(convert_dtc_to_dt(VSDTC)) &
-          !(is.na(VSSTRESN) & is.na(VSSTRESC)),
-        set_values_to = exprs(LSTAVLDT = convert_dtc_to_dt(VSDTC), seq = VSSEQ)
-      ),
-      event(
-        dataset_name = "ae",
-        order        = exprs(AESTDTC, AESEQ),
-        condition    = !is.na(convert_dtc_to_dt(AESTDTC)),
-        set_values_to = exprs(LSTAVLDT = convert_dtc_to_dt(AESTDTC), seq = AESEQ)
-      ),
-      event(
-        dataset_name = "ds",
-        order        = exprs(DSSTDTC, DSSEQ),
-        condition    = !is.na(convert_dtc_to_dt(DSSTDTC)),
-        set_values_to = exprs(LSTAVLDT = convert_dtc_to_dt(DSSTDTC), seq = DSSEQ)
-      ),
-      event(
-        dataset_name = "adsl",
-        condition    = !is.na(TRTEDTM),
-        set_values_to = exprs(LSTAVLDT = as_date(TRTEDTM), seq = 0)
-      )
-    ),
-    source_datasets = list(vs = vs, ae = ae, ds = ds, adsl = adsl),
-    tmp_event_nr_var = event_nr,
-    order    = exprs(LSTAVLDT, seq, event_nr),
-    mode     = "last",
-    new_vars = exprs(LSTAVLDT)
-  )
+# ---- LSTAVLDT: latest complete date from VS, AE, DS, TRTEDTM ----
+# "Complete" = full date YYYY-MM-DD (at least 10 characters)
+vs_dt <- vs %>%
+  filter(nchar(VSDTC) >= 10, !(is.na(VSSTRESN) & is.na(VSSTRESC))) %>%
+  transmute(USUBJID, DT = as.Date(substr(VSDTC, 1, 10)))
+
+ae_dt <- ae %>%
+  filter(nchar(AESTDTC) >= 10) %>%
+  transmute(USUBJID, DT = as.Date(substr(AESTDTC, 1, 10)))
+
+ds_dt <- ds %>%
+  filter(nchar(DSSTDTC) >= 10) %>%
+  transmute(USUBJID, DT = as.Date(substr(DSSTDTC, 1, 10)))
+
+trt_dt <- adsl %>%
+  filter(!is.na(TRTEDTM)) %>%
+  transmute(USUBJID, DT = as.Date(TRTEDTM))
+
+last_alive <- bind_rows(vs_dt, ae_dt, ds_dt, trt_dt) %>%
+  group_by(USUBJID) %>%
+  summarise(LSTAVLDT = max(DT, na.rm = TRUE), .groups = "drop")
+
+adsl <- adsl %>% left_join(last_alive, by = "USUBJID")
 
 # ---- Self-QC ----
-cat("\nN subjects:", n_distinct(adsl$USUBJID), "| dup USUBJID:",
-    sum(duplicated(adsl$USUBJID)), "\n")
+cat("\nN subjects:", n_distinct(adsl$USUBJID),
+    "| dup USUBJID:", sum(duplicated(adsl$USUBJID)), "\n")
 print(count(adsl, AGEGR9, AGEGR9N))
 print(count(adsl, ARM, ITTFL))
 print(count(adsl, TRTSTMF))
 cat("Missing TRTSDTM:", sum(is.na(adsl$TRTSDTM)),
     "| Missing LSTAVLDT:", sum(is.na(adsl$LSTAVLDT)), "\n")
 cat("LSTAVLDT < TRTSDTM date:",
-    sum(adsl$LSTAVLDT < as_date(adsl$TRTSDTM), na.rm = TRUE), "\n")
+    sum(adsl$LSTAVLDT < as.Date(adsl$TRTSDTM), na.rm = TRUE), "\n")
 
 # ---- Save ----
 saveRDS(adsl, "question_2_adam/adsl.rds")

@@ -12,39 +12,52 @@
 
 > adsl <- dm %>% select(-DOMAIN)
 
-> # ---- Exposure: datetimes, valid-dose records only ----
-> # Date must be complete (highest_imputation = "h"); time imputed with 00;
-> # ignore_seco .... [TRUNCATED] 
+> # ---- Exposure: keep valid doses only, then make datetimes ----
+> # Valid dose: EXDOSE > 0, or EXDOSE = 0 with PLACEBO in EXTRT
+> ex_valid <- ex %> .... [TRUNCATED] 
 
-> valid_dose <- expr(
-+   EXDOSE > 0 | (EXDOSE == 0 & str_detect(toupper(EXTRT), "PLACEBO"))
-+ )
-
+> # ---- TRTSDTM / TRTSTMF: first valid dose ----
 > adsl <- adsl %>%
 +   derive_vars_merged(
-+     dataset_add = ex_ext,
-+     filter_add  = !!valid_dose & !is.na(EXSTDTM),
-+     new_vars    = exprs(T .... [TRUNCATED] 
++     dataset_add = ex_valid,
++     filter_add  = !is.na( .... [TRUNCATED] 
 
-> # ---- Age groups ----
+> # ---- AGEGR9 / AGEGR9N ----
 > adsl <- adsl %>%
 +   mutate(
 +     AGEGR9 = case_when(
-+       AGE < 18               ~ "<18",
-+       AGE >= 18 & AGE <= 5 .... [TRUNCATED] 
++       AGE < 18              ~ "<18",
++       AGE >= 18 & AGE .... [TRUNCATED] 
 
-> # ---- ITTFL: Y if ARM populated ----
+> # ---- ITTFL: Y if ARM is populated ----
 > adsl <- adsl %>%
 +   mutate(ITTFL = if_else(!is.na(ARM), "Y", "N"))
 
-> # ---- LSTAVLDT: max of complete dates from VS, AE, DS, TRTEDTM ----
-> adsl <- adsl %>%
-+   derive_vars_extreme_event(
-+     by_vars = exprs(STUDYID .... [TRUNCATED] 
+> # ---- LSTAVLDT: latest complete date from VS, AE, DS, TRTEDTM ----
+> # "Complete" = full date YYYY-MM-DD (at least 10 characters)
+> vs_dt <- vs %>% .... [TRUNCATED] 
+
+> ae_dt <- ae %>%
++   filter(nchar(AESTDTC) >= 10) %>%
++   transmute(USUBJID, DT = as.Date(substr(AESTDTC, 1, 10)))
+
+> ds_dt <- ds %>%
++   filter(nchar(DSSTDTC) >= 10) %>%
++   transmute(USUBJID, DT = as.Date(substr(DSSTDTC, 1, 10)))
+
+> trt_dt <- adsl %>%
++   filter(!is.na(TRTEDTM)) %>%
++   transmute(USUBJID, DT = as.Date(TRTEDTM))
+
+> last_alive <- bind_rows(vs_dt, ae_dt, ds_dt, trt_dt) %>%
++   group_by(USUBJID) %>%
++   summarise(LSTAVLDT = max(DT, na.rm = TRUE), .groups = "drop")
+
+> adsl <- adsl %>% left_join(last_alive, by = "USUBJID")
 
 > # ---- Self-QC ----
-> cat("\nN subjects:", n_distinct(adsl$USUBJID), "| dup USUBJID:",
-+     sum(duplicated(adsl$USUBJID)), "\n")
+> cat("\nN subjects:", n_distinct(adsl$USUBJID),
++     "| dup USUBJID:", sum(duplicated(adsl$USUBJID)), "\n")
 
 N subjects: 306 | dup USUBJID: 0 
 
@@ -76,7 +89,7 @@ N subjects: 306 | dup USUBJID: 0
 Missing TRTSDTM: 52 | Missing LSTAVLDT: 0 
 
 > cat("LSTAVLDT < TRTSDTM date:",
-+     sum(adsl$LSTAVLDT < as_date(adsl$TRTSDTM), na.rm = TRUE), "\n")
++     sum(adsl$LSTAVLDT < as.Date(adsl$TRTSDTM), na.rm = TRUE), "\n")
 LSTAVLDT < TRTSDTM date: 0 
 
 > # ---- Save ----
