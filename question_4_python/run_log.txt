@@ -1,0 +1,15 @@
+Q: Give me the subjects who had Adverse events of Moderate severity.
+   Mapped to: AESEV = MODERATE
+   Unique subjects: 136
+   First 5 IDs: ['01-701-1023', '01-701-1047', '01-701-1097', '01-701-1111', '01-701-1115'] 
+
+Q: Which subjects had Headache?
+   Mapped to: AETERM = HEADACHE
+   Unique subjects: 16
+   First 5 IDs: ['01-701-1180', '01-701-1302', '01-701-1363', '01-701-1383', '01-704-1388'] 
+
+Q: How many patients had cardiac problems?
+   Mapped to: AESOC = CARDIAC
+   Unique subjects: 44
+   First 5 IDs: ['01-701-1023', '01-701-1047', '01-703-1175', '01-703-1299', '01-703-1335'] 
+
